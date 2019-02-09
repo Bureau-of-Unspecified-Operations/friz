@@ -12,8 +12,10 @@ class DHTNode(object):
         ip = input("Enter bootstrap IP:")
         port = input("Enter bootstrap port:")
         self.boot = [(ip, int(port))]
+        self.attemptBootstrap()
 
     def attemptBootstrap(self):
+        print(self.boot)
         task = self.loop.create_task(self.node.bootstrap(self.boot))
         task.add_done_callback(lambda future: print("bootstrap attempt failed") if len(future.result()) == 0 else print("bootstrap succeeded"))
         self.loop.run_until_complete(task)
@@ -29,6 +31,7 @@ class DHTNode(object):
     def testKeyPut(self):
         self.loop.run_until_complete(self.node.set("key","value"))
         result = self.loop.run_until_complete(self.node.get("key"))
+        print(result)
 
 
 
