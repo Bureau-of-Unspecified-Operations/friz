@@ -1,12 +1,38 @@
+import asyncio
+from kademlia.network import Server
 
-def searchSessionRequest():
-    pass
 
-def commitSessionRequest(req):
-    pass
 
-def launchTorPayload(tor, payload):
-    pass
 
-def createRotPayload(pub, payload):
-    pass
+class DHTNode(object):
+    def __init__(self, loop):
+        self.loop = loop
+        self.node = Server()
+        loop.run_until_complete(self.node.listen(self.genPersonalPort()))
+        ip = input("Enter bootstrap IP:")
+        port = input("Enter bootstrap port:")
+        self.boot = [(ip, int(port))]
+
+    def attemptBootstrap(self):
+        task = self.loop.create_task(self.node.bootstrap(self.boot))
+        task.add_done_callback(lambda future: print("bootstrap attempt failed") if len(future.result()) == 0 else print("bootstrap succeeded"))
+        self.loop.run_until_complete(task)
+
+    # actually solve, currently use dummy
+    def bootstrappableNodes(self):
+        return [("123.123.123.123", 5678)]
+
+
+    def genPersonalPort(self):
+        return 5678
+
+    def testKeyPut(self):
+        self.loop.run_until_complete(self.node.set("key","value"))
+        result = self.loop.run_until_complete(self.node.get("key"))
+
+
+
+
+
+                                
+    
