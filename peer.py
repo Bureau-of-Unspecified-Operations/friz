@@ -33,6 +33,23 @@ class DHTNode(object):
         result = self.loop.run_until_complete(self.node.get("key"))
         print(result)
 
+    def putData(self, key, value):
+        didSucceed = self.loop.run_until_complete(self.node.set(key, value))
+        if didSucceed:
+            print("succesfully stored [" + key + "," + value + "]")
+        else:
+            print("failed put")
+
+    def getData(self, key):
+        result = self.loop.run_until_complete(self.node.get(key))
+        if result != None:
+            print("get succeeded")
+            return result
+        else:
+            print("failed get")
+
+
+
 
 
 
