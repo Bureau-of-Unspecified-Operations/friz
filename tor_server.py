@@ -1,4 +1,5 @@
 import asyncio
+import rsa
 from rpcudp.protocol import RPCProtocol
 
 
@@ -17,7 +18,9 @@ class TORServer(RPCProtocol):
             TOR.forwardPacket(data, self)
         return "packet recieved"
     
-class TOR(object):        
+class TOR(object):
+    END_OF_TOR_PATH = 0
+    
     def __init__(self, loop, port):
         listen = loop.create_datagram_endpoint(TORServer, local_addr=('127.0.0.1', port))
         transport, protocol = loop.run_until_complete(listen)
@@ -52,13 +55,36 @@ class TOR(object):
     def isTorPacket(packet):
         return True
 
-    def addressFromPacket(packet):
-        pass
+    def addressFromROT(rotTuple):
+        return rotTuple[1]
+
+    def cipherFromROT(rotTuple):
+        return rotTuple[0]
+
+    # nodeTuples take form (pubKey, address)
+    # dataTuples is (encryptedROT, addresss)
+    # type (dataTuple * nodeTuple) -> (cipherPayload, address)
+    def rotFold(dataTuple, nodeTuple):
+        s = str(dataTuple).encode("utf8")
+        return (rsa.encrypt(s, nodeTuple[0]), nodeTuple[1])
+
+    # type = (rotTuple, pub) -> rotTuple
+    def rotUnfold(rotTuple, pubKey):
+        plain = rsa.decrypt(TOR.cipherFromROT(rotTuple), pubKey)
+        rot = ast.literal_eval(plain)
+        print(TOR.addressFromROT(rot))
+        return rot
+
+    def generateROT(pubID, myIP, ORNodes):
+        return reduce(TOR.rotFold, ORNodes, (END_OF_TOR_PATH,END_OF_TOR_PATH))
+
+    def testDecryptROT(rot, ORNodes):
+        
+        
 
 
 
 '''
-
 class T(object):
 
     def __init__(self, loop, port):
@@ -78,7 +104,5 @@ class T(object):
 
     def forwardTOR(self, ip, port):
         func = self.forward(self.protocol, ("128.237.160.131", 6789))
-        self.loop.run_until_complete(func)
-
-    
+        self.loop.run_until_complete(func)    
 '''
