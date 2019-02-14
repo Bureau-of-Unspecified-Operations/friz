@@ -11,25 +11,24 @@ transport, protocol = loop.run_until_complete(listen)
 
 
 class TORServer(RPCProtocol):
-    TERMINAL_TUPLE = (0,0)
-
-    def newServer(loop, port, privKey, pubKey):
+    def newServer(loop, port, privKey, pubKey, appNode):
         listen = loop.create_datagram_endpoint(TORServer, local_addr=('127.0.0.1', port))
         transport, protocol = loop.run_until_complete(listen)
         protocol.port = port
         protocol.privKey = privKey
         protocol.pubKey = pubKey
+        protocol.appNode = appNode
         return protocol
     
     def rpc_forward(self, sender, packet):
         print(sender)
         print(packet)
-        if (isTerminalPacket(packet, privKey)):
-            #give message to UI
-            pass
+        if (TORUtil.isTerminalPacket(packet, privKey)):
+            encRevTor, payload = TORUtil.splitPacket(packet)
+            self.appNode.openPayload(payload)
         else:
-            nextPacket, address = peel(packet)
-            forwardPacket(nextPacket, address)
+            nextPacket, address = TORUtil.peel(packet)
+            self.forwardPacket(nextPacket, address)
         return "packet recieved"
 
     @asyncio.coroutine
@@ -38,24 +37,13 @@ class TORServer(RPCProtocol):
         print(result[1] if result[0] else "No response received.")
 
     #takes (packet, address) rot tuple and forwarads the packet to the address
-    def forwardROT(self, packet, address):
+    def forwardPacket(self, packet, address):
         func = self.forward(self, address, packet)
         asyncio.get_event_loop().run_until_complete(func)
         
 
 class TORUtil(object):
     TERMINAL_REV_TOR = (0,0)
-
-    # serverOnion <=> (data_to_send, address)
-    #       - data_to_send is what other TOR servers recieve
-    # data_to_send <=> (encrypted(ROT), encrypted(payload))
-    # payload <=> ROT, encyrpt(message), pubKey
-    #    - ROT will let the payload recipient find the caller
-    #    - message will be decrypted with the recipients IDprivateKey
-    #    - pubKey is the identity key that the caller wants to be reached by in future
-    # ROT <=> layered encrypted(ROT'),IP
-    #    - you could just send a rot, but DONT, becaues it has no payload
-
 
     #generate a revTor that would travel from the end to the beginning of the ORnodes
     def generateRevTor(ORNodes):
@@ -111,77 +99,4 @@ class TORUtil(object):
     #
 
 
-def newTORServer(loop, port, privKey, pubKey):
-    listen = loop.create_datagram_endpoint(TORServer, local_addr=('127.0.0.1', port))
-    transport, protocol = loop.run_until_complete(listen)
-    protocol.port = port
-    protocol.privKey = privKey
-    protocol.pubKey = pubKey
-    return protocol
 
-
-'''
-class TOR(object):
-    TERMINAL_TUPLE = (0,0)
-    
-    def __init__(self, loop, port):
-        listen = loop.create_datagram_endpoint(TORServer, local_addr=('127.0.0.1', port))
-        transport, protocol = loop.run_until_complete(listen)
-        self.protocol = protocol
-        
-    @asyncio.coroutine
-    def forward(self, protocol, address):
-        # result will be a tuple - first arg is a boolean indicating whether a response
-        # was received, and the second argument is the response if one was received.
-        result = yield from protocol.forward(address, "data")
-        print(result[1] if result[0] else "No response received.")
-
-    def forwardTOR(self):
-        func = self.forward(self.protocol, ('127.0.0.1', 1234))
-        self.loop.run_until_complete(func)
-
-    def forwardPacketSelf(self, packet):
-        func = TOR.forward(self.protocol, TOR.addressFromPacket(packet),
-                           TOR.dataFromPacket)
-
-    @asyncio.coroutine
-    def forward(protocol, address, data):
-        result = yield from protocol.forward(address, data)
-        print(result[1] if result[0] else "No response received.")
-
-
-    #takes (packet, address) rot tuple and forwarads the packet to the address
-    def forwardROT(protocol, rot):
-        func = TOR.forward(protocol, TOR.addressFromROT(rot), TOR.packetFromROT(rot))
-        asyncio.get_event_loop().run_until_complete(func)
-        
-
-    def isTerminalPacket(packet, priKey):
-        return TOR.packetFromROT(TOR.packetUnfold(packet, priKey)) == TOR.TERMINAL_TUPLE
-
-    def addressFromROT(rotTuple):
-        return rotTuple[1]
-
-    def packetFromROT(rotTuple):
-        return rotTuple[0]
-
-    # nodeTuples take form (pubKey, address)
-    # dataTuples is (encryptedROT, addresss)
-    # type (dataTuple * nodeTuple) -> (cipherPayload, address)
-    def rotFold(dataTuple, nodeTuple):
-        s = str(dataTuple).encode("utf8")
-        return (rsa.encrypt(s, nodeTuple[0]), nodeTuple[1])
-
-    # type = (cipher, pri) -> rotTuple
-    def packetUnfold(cipher, priKey):
-        plain = rsa.decrypt(cipher, priKey)
-        rot = ast.literal_eval(plain)
-        print(TOR.addressFromROT(rot))
-        return rot
-
-    def generateROT(pubID, myIP, ORNodes):
-        return reduce(TOR.rotFold, ORNodes, TERMINAL_TUPLE)
-
-    def testDecryptROT(rot, ORNodes):
-        
-        """
